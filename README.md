@@ -1,120 +1,48 @@
-Openstack HA平台部署shell 2.0脚本安装说明
-=================================== 
-###目录结构：
-</br>install_shell_2.0
-</br>   ├── 2.0_ceph-deploy-tools   ### 计算节点部署脚本
-</br>   │   ├── sh                  ### 需要scp到各个计算节点执行的脚本
-</br>   │   └── wheel_ceph
-</br>   └── 2.0_tools               ### 控制节点部署脚本
-</br>       ├── sh                  ### 需要scp到各个控制节点执行的脚本
-</br>       └── t_sh                ### 各节点存放脚本的临时目录
+# Openstack HA高可用集群部署脚本
+## 1 关于脚本
+该脚本使用Shell撰写,用于Openstack HA高可用集群的部署，实现了Pacemaker、Galera、RabbitMQ、Openstack、Ceph等集群的半自动化部署，可用于中小型规模Openstack云平台的快速部署。
 
+## 2 部署环境简介
 
-注意：1~22、在controller01节点上进行基本配置和Openstack控制节点的部署，23~29在compute01上进行ceph集群的部署
+* 软件环境：
 
-1、根据实际部署环境，设置环境变量，并初始化
-</br> vim 0-set-config.sh
-</br> . 0-set-config.sh
+CentOS7.2+MariaDB+Openstack-Mitaka+Ceph-Jewel
 
-2、测试部署环境的网络连通性：三个网络是否联通 
-</br> . test-network.sh
+* 硬件环境：
 
-3、设置各节点之间免密码登录 
-</br> . set-ssh-nodes.sh
+    * 3个控制节点+3个网络节点+至少一个计算节点
+    * 管理网、虚拟机网、存储网三个网段
+    * 每个节点具备3张网卡，每个网段的网卡需要统一命名
+    * 默认要求各节点的三个网段尾数相同(脚本自动更正)
+    * 每个节点至少一块独立数据盘，用于Ceph OSD盘（可根据实际需求变更）
+    
+* 其他
 
-4、网卡配置（如果已设置可省略） 
-</br> . set-network-config.sh
+    * 离线Yum安装，需提前准备好软件安装包，本例采用FTP本地安装源
+    * root权限安装  
+    * 管理网最初需要相互联通
+    * 需要配置计算节点（作为Ceph集群的部署节点）到其他各节点之间的SSH（需在该节点手动执行配置脚本）
+    
+## 3 使用说明
+* 根据实际环境，配置部署变量初始化0-set-config.sh，设置节点主机名、IP、VIP、网卡信息、网段信息、安装源、OSD磁盘信息、密码信息
+```shell
+  # vim  0-set-config.sh
+```
+* 执行all-in-one.sh或按顺序执行每个安装步骤
+```shell
+  # . all-in-one.sh
+```
+* 详细说明请阅读个人博客中“[Openstack云平台脚本部署](http://zjzone.cc/?s=Openstack%E4%BA%91%E5%B9%B3%E5%8F%B0%E8%84%9A%E6%9C%AC%E9%83%A8%E7%BD%B2)”系列文章
 
-5、设置主机名，控制节点命名 controller+数字（01、02、03）计算节点命名compute+数字（01、02、03……）
-</br> . set-hostname.sh
+## 4 更新说明
 
-6、关闭防火墙禁用SELinux 需要重启节点，部署节点手动重启
-</br> . disable_firewall_selinux.sh
+对之前脚本进行了重构，改进之处主要包括： 
 
-7、设置时间同步：与controller01时间同步 
-</br> . set-chrony.sh
+* 命令执行方式：不在通过将脚本文件scp各个节点，然后再执行，统一改成"pssh 命令”执行的方式 
+* 并行执行命令：对于比较耗时的操作，尝试改用pssh进行个节点并行执行
+* 友好的安装提示：带颜色的提示信息
 
-8、制作本地软件源：需要将下载好的离线安装包放到指定FTP目录
-</br> . set-local-yum-repos.sh
+## 5 问题反馈
+如有问题，欢迎留言反馈。
 
-9、安装Pacemaker  
-</br> . install-configure-pacemaker.sh
-</br> 注意：默认设置认证用户密码与配置文件中一致
-
-10、安装Haproxy
-</br> . install-configure-haproxy.sh
-
-11、安装Galera 
-</br> . install-configure-galera.sh
-注意：初始数据库时设置数据库Root密码与配置文件中一致
-如果无法通过vip访问数据库，执行restart-pcs-cluster.sh重启pcs集群后再检查
-</br> . restart-pcs-cluster.sh
-
-12、安装rabbit
- </br> . install-configure-rabbitmq.sh
- </br> 注意：默认设置openstack认证用户密码与配置文件中一致
- 
- 13、安装memcached
- </br> . install-configure-memcached.sh
-
- 14、安装openstack安装包
-</br>  . install-configure-prerequisites.sh
- 
- 15、安装openstack Identity
-</br> . install-configure-keystone.sh
-</br> 执行restart-pcs-cluster.sh重启pcs集群后检查pcs resource,确保keystone服务启动
-</br> . restart-pcs-cluster.sh
- 
- 16、安装openstack Image
-</br> . install-configure-glance.sh
-</br>  执行restart-pcs-cluster.sh重启pcs集群后检查pcs resource，确保glance服务启动
-</br> . restart-pcs-cluster.sh
-
-17、安装openstack Compute
-</br> . install-configure-nova.sh 
-</br>  执行restart-pcs-cluster.sh重启pcs集群后检查pcs resource，确保nova服务启动
-</br> . restart-pcs-cluster.sh
-
-18、安装openstack neutron
-</br> . install-configure-neutron.sh
-</br>  执行restart-pcs-cluster.sh重启pcs集群后检查pcs resource，确保neutron服务启动
-</br> . restart-pcs-cluster.sh
-
-19、安装openstack dashboard 
-</br> . install-configure-dashboard.sh
-
-20、安装openstack cinder
-</br> . install-configure-cinder.sh
-
-21、安装openstack Ceilometer
-</br> . install-configure-ceilometer.sh
-
-22、安装openstack Aodh
-</br> . install-configure-aodh.sh
-
-23、安装计算&存储节点的ssh 
-</br> . set-ssh-openstack-storage-nodes.sh
-
-24、安装ceph-deploy
-</br> . install-prerequisites-ceph-deploy.sh
- 
-25、安装ceph block storage cluster
-</br> . install-configure-ceph-storage-cluster.sh
-</br> 检查ceph存储网络所在网段
-
-27、存储节点与控制节点之间的ssh
-</br> . set-ssh-openstack-storage-nodes.sh
-
-28、安装ceph auth client.key
-</br> . install-ceph-auth-client.key
-
-29、配置计算节点
-</br> . install-compute-nodes-services.sh
-
-30、删除安装脚本
-</br>. delete-tmp-shells.sh
-
-
-
-
-
+* 个人博客: <http://zjzone.cc>
